@@ -1,4 +1,4 @@
-import { Application/*, Context*/ } from 'probot'
+import { Probot/*, Context*/ } from 'probot'
 //const yaml = require('js-yaml')
 
 const re = /(?:(?:resolv|clos|fix)e[ds]?|fix) +#(\d+)/ig
@@ -7,18 +7,18 @@ const re = /(?:(?:resolv|clos|fix)e[ds]?|fix) +#(\d+)/ig
 /*
 async function ensureLabelExists(context: Context, name: string) {
     try {
-        return await context.github.issues.getLabel(context.repo({
+        return await context.octokit.issues.getLabel(context.repo({
             name: name,
         }))
     } catch (e) {
-        return context.github.issues.createLabel(context.repo({
+        return context.octokit.issues.createLabel(context.repo({
             name: name,
             color: '69D100'
         }))
     }
 }
 */
-export = (app: Application) => {
+export = (app: Probot) => {
     app.on('pull_request.closed', async (context) => {
         const pull = context.payload.pull_request
         if (!pull.merged) {
@@ -26,18 +26,18 @@ export = (app: Application) => {
             return
         }
         /*
-        const repo = await context.github.repos.get(context.repo())
+        const repo = await context.octokit.repos.get(context.repo())
         if (repo.data.default_branch != pull.base.ref) {
             app.log(`The pull request target branch (${pull.base.ref}) is not the repo default branch (${repo.data.default_branch}). Stepping out...`)
             return
         }
         */
         const issues = new Set<string>()
-        let match = re.exec(pull.body)
+        let match = pull.body !== null && re.exec(pull.body)
         while (match) {
             issues.add(match[1])
             app.log(`Found fixed issue: #${match[1]}.`)
-            match = re.exec(pull.body)
+            match = re.exec(pull.body!)
         }
         if (issues.size == 0) {
             app.log('This pull request fixes no issue. Stepping out...')
@@ -49,10 +49,10 @@ export = (app: Application) => {
             return
         }
         for (const id of issues) {
-            const issue = await context.github.issues.get(context.issue({
+            const issue = await context.octokit.issues.get(context.issue({
                 number: id,
             }))
-            const currentLabels = issue.data.labels.map(label => label.name)
+            const currentLabels = issue.data.labels.map(label => typeof label === "string" ? label : label.name).filter((label): label is NonNullable<typeof label> => label != null)
             const labels = new Set<string>()
             for (const label of currentLabels) {
                 if (labels.has(label)) {
@@ -78,7 +78,7 @@ export = (app: Application) => {
             })
             */
             app.log(`Adding ${labels.size} label(s) to issue #${id}...`)
-            await context.github.issues.addLabels(context.issue({
+            await context.octokit.issues.addLabels(context.issue({
                 labels: labelsToAdd,
                 number: id,
             }))
